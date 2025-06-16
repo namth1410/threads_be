@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: namth
+      DB_PASSWORD: 01664157092aA
+      DB_NAME: threads_db
+
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: namth
+      MINIO_SECRET_KEY: 01664157092aA
+      MINIO_USE_SSL: 'false'
+      MINIO_BUCKET_NAME: threads
+
+      JWT_SECRET: fa5fa60b21cfd9559354b0dcaf6312c6023a1045785e80ead23f9800bad834a9
+
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: 9200
+    networks:
+      - threads_network
+    ports:
+      - target: 3000
+        published: 3000
+        mode: host
+    depends_on:
+      - postgres
+      - minio
+      - elasticsearch
+
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: namth
+      POSTGRES_PASSWORD: 01664157092aA
+      POSTGRES_DB: threads_db
+    ports:
+      - '5438:5432'
+    networks:
+      - threads_network
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  minio:
+    image: quay.io/minio/minio
+    ports:
+      - target: 9000 # Cổng MinIO trong container
+        published: 9002 # Cổng được ánh xạ ra ngoài máy chủ
+        mode: host # Ánh xạ trực tiếp từ host
+      - target: 9001 # Cổng console MinIO trong container
+        published: 9003 # Cổng console được ánh xạ ra ngoài máy chủ
+        mode: host
+    environment:
+      MINIO_ROOT_USER: namth
+      MINIO_ROOT_PASSWORD: 01664157092aA
+    volumes:
+      - minio-data:/data
+    networks:
+      - threads_network
+    command: server /data --console-address ":9001"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.16.0
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m # Giới hạn bộ nhớ cho Elasticsearch
+    ports:
+      - '9200:9200'
+    networks:
+      - threads_network
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.16.0
+    ports:
+      - target: 5601
+        published: 5601
+        mode: host
+    environment:
+      ELASTICSEARCH_HOSTS: 'http://elasticsearch:9200'
+    depends_on:
+      - elasticsearch
+    networks:
+      - threads_network
+
+networks:
+  threads_network:
+    driver: bridge
+volumes:
+  postgres-data:
+  minio-data:
+  es-data:

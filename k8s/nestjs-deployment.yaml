@@ -1,0 +1,47 @@
+# nestjs-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nestjs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nestjs
+  template:
+    metadata:
+      labels:
+        app: nestjs
+    spec:
+      containers:
+        - name: nestjs
+          image: your_nestjs_image:latest # Thay bằng tên hình ảnh của bạn
+          env:
+            - name: DATABASE_HOST
+              value: 'postgres'
+            - name: DATABASE_PORT
+              value: '5432'
+            - name: DATABASE_USER
+              value: 'namth'
+            - name: DATABASE_PASSWORD
+              value: '01664157092aA'
+            - name: DATABASE_NAME
+              value: 'threads_db'
+            - name: MINIO_ENDPOINT
+              value: 'minio:9000'
+            - name: MINIO_ACCESS_KEY
+              value: 'namth'
+            - name: MINIO_SECRET_KEY
+              value: '01664157092aA'
+          ports:
+            - containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nestjs
+spec:
+  ports:
+    - port: 3000
+  selector:
+    app: nestjs

@@ -1,0 +1,54 @@
+# This config was automatically generated from your source code
+# Stacks detected: deps:node:.,test:jest:
+version: 2.1
+orbs:
+  node: circleci/node@5
+  docker: circleci/docker@1.6.0
+jobs:
+  build-and-push:
+    environment:
+      DOCKER_IMAGE: threads_be
+      DOCKER_TAG: latest
+    executor: docker/docker
+    steps:
+      - setup_remote_docker
+      - checkout
+      - docker/check:
+          docker-username: DOCKER_USER
+          docker-password: DOCKER_PASSWORD
+      - docker/build:
+          image: $DOCKER_USER/$DOCKER_IMAGE
+          tag: $DOCKER_TAG
+
+      - docker/push:
+          digest-path: /tmp/digest.txt
+          image: $DOCKER_USER/$DOCKER_IMAGE
+          tag: $DOCKER_TAG
+      - run:
+          command: |
+            echo "Digest is: $(</tmp/digest.txt)"
+  deploy:
+    executor: docker/docker
+    steps:
+      - run:
+          name: Log SSH Key Fingerprint
+          command: |
+            echo "SSH_KEY_FINGERPRINT: $SSH_KEY_FINGERPRINT"
+      - add_ssh_keys:
+          fingerprints:
+            - $SSH_KEY_FINGERPRINT
+      - run: ssh -v -oStrictHostKeyChecking=no $DEPLOYED_USER@$DEPLOYED_SERVER './threads_be_start.sh'
+
+workflows:
+  cicd-ing:
+    jobs:
+      - build-and-push:
+          context: fs
+          filters:
+            branches:
+              only:
+                - main
+      - deploy:
+          context: fs
+          requires:
+            - build-and-push
