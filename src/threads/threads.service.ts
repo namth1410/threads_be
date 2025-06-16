@@ -9,7 +9,7 @@ import { PageResponseDto } from 'src/common/dto/page-response.dto';
 import { ResponseDto } from 'src/common/dto/response.dto';
 import { MediaEntity } from 'src/minio/media.entity';
 import { MinioService } from 'src/minio/minio.service';
-import { DataSource, Like, Repository } from 'typeorm';
+import { DataSource, EntityManager, Like, Repository } from 'typeorm';
 import { ThreadsPaginationDto } from './dto/threads-pagination.dto';
 import { ThreadEntity } from './thread.entity'; // Giả sử bạn đã có một entity cho Thread
 import { ThreadsRepository } from './threads.repository';
@@ -50,8 +50,16 @@ export class ThreadsService {
 
   async create(
     threadData: Partial<ThreadEntity>,
+    manager?: EntityManager,
   ): Promise<ResponseDto<ThreadEntity>> {
-    return this.threadsRepository.createEntity(threadData);
+    if (manager) {
+      const saved = await manager.getRepository(ThreadEntity).save(threadData);
+      return new ResponseDto(saved, 'Thread created', 201);
+    }
+
+    // Nếu không có manager, dùng repository mặc định
+    const saved = await this.threadsRepository.createEntity(threadData);
+    return saved;
   }
 
   async update(
@@ -94,44 +102,46 @@ export class ThreadsService {
     });
   }
 
-  async addMediaToThread(
+  async attachMedia(
     threadId: number,
-    url: string,
-    type: string,
-    fileName: string,
-  ) {
-    const media = this.mediaRepository.create({
-      url,
-      type,
-      fileName,
-      thread: { id: threadId },
-    });
-    await this.mediaRepository.save(media);
-  }
-
-  async attachMedia(threadId: number, files: Express.Multer.File[]) {
+    files: Express.Multer.File[],
+    manager?: EntityManager,
+  ): Promise<string[]> {
     const bucketName = process.env.MINIO_BUCKET_NAME;
+    const uploadedFiles: string[] = [];
 
-    const mediaEntities = await Promise.all(
-      files.map(async (file) => {
-        const fileName = await this.minioService.uploadFile(bucketName, file);
-        const fileUrl = await this.minioService.getFileUrl(
-          bucketName,
-          fileName,
-        );
-        const type = file.mimetype.startsWith('image') ? 'image' : 'video';
+    try {
+      const mediaEntities = await Promise.all(
+        files.map(async (file) => {
+          const fileName = await this.minioService.uploadFile(bucketName, file);
+          uploadedFiles.push(fileName); // để rollback nếu lỗi
 
-        return {
-          threadId,
-          url: fileUrl,
-          type,
-          fileName,
-        };
-      }),
-    );
+          const fileUrl = await this.minioService.getPublicUrl(
+            bucketName,
+            fileName,
+          );
+          const type = file.mimetype.startsWith('image') ? 'image' : 'video';
 
-    // Thực hiện bulk insert 1 lần
-    await this.bulkAddMediaToThread(mediaEntities);
+          return {
+            threadId,
+            url: fileUrl,
+            type,
+            fileName,
+          };
+        }),
+      );
+
+      await this.bulkAddMediaToThread(mediaEntities, manager); // truyền manager vào
+      return uploadedFiles;
+    } catch (error) {
+      // Rollback MinIO files
+      await Promise.all(
+        uploadedFiles.map((fileName) =>
+          this.minioService.removeFile(bucketName, fileName),
+        ),
+      );
+      throw error;
+    }
   }
 
   async bulkAddMediaToThread(
@@ -141,16 +151,21 @@ export class ThreadsService {
       type: string;
       fileName: string;
     }[],
+    manager?: EntityManager,
   ) {
+    const repo = manager
+      ? manager.getRepository(MediaEntity)
+      : this.mediaRepository;
+
     const entities = mediaList.map((media) =>
-      this.mediaRepository.create({
+      repo.create({
         url: media.url,
         type: media.type,
-        fileName: media.type,
+        fileName: media.fileName, // bạn đang bị lỗi chỗ này: `fileName: media.type` sai!
         thread: { id: media.threadId },
       }),
     );
 
-    await this.mediaRepository.save(entities); // bulk insert
+    await repo.save(entities);
   }
 }

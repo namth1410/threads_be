@@ -41,6 +41,7 @@ import { ThreadsPaginationDto } from './dto/threads-pagination.dto';
 import { UpdateThreadDto } from './dto/update-thread.dto';
 import { ThreadEntity } from './thread.entity'; // Entity cho bài đăng
 import { ThreadsService } from './threads.service';
+import { DataSource } from 'typeorm';
 
 @ApiTags('threads')
 @Controller('threads')
@@ -50,6 +51,7 @@ export class ThreadsController {
   @Inject(WINSTON_MODULE_NEST_PROVIDER) private readonly logger: LoggerService; // Inject logger Winston
 
   constructor(
+    private readonly dataSource: DataSource,
     private readonly threadsService: ThreadsService,
     private readonly usersService: UsersService, // Inject UsersService
     private readonly minioService: MinioService,
@@ -157,9 +159,12 @@ export class ThreadsController {
           example: 'This is a sample thread content',
         },
         files: {
-          type: 'string',
-          format: 'binary', // Định dạng file là binary
-          description: 'Uploaded file (optional)',
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+          description: 'Multiple files (optional)',
         },
       },
     },
@@ -186,33 +191,65 @@ export class ThreadsController {
       throw new NotFoundException('User not found'); // Handle user not found scenario
     }
 
-    const threadData: Partial<ThreadEntity> = {
-      content: createThreadDto.content,
-      user: user.data,
-    };
-    this.logger.log(`Creating thread with content: ${createThreadDto.content}`);
-    console.log(`Creating thread with content: ${createThreadDto.content}`);
+    // List file đã upload để rollback nếu cần
+    const uploadedFileNames: string[] = [];
+    try {
+      const response = await this.dataSource.transaction(async (manager) => {
+        // Tạo thread (pass manager vào để dùng trong transaction)
+        const thread = await this.threadsService.create(
+          {
+            content: createThreadDto.content,
+            user: user.data,
+          },
+          manager, // ⬅️ truyền manager vào
+        );
 
-    const thread = await this.threadsService.create(threadData);
+        // Gắn media nếu có
+        if (files && files.length > 0) {
+          const uploadedFiles = await this.threadsService.attachMedia(
+            thread.data.id,
+            files,
+            manager, // ⬅️ truyền manager
+          );
+          uploadedFileNames.push(...uploadedFiles); // dùng để rollback nếu lỗi DB sau đó
+        }
 
-    // ✅ Gọi attachMedia nếu có files
-    if (files && files.length > 0) {
-      await this.threadsService.attachMedia(thread.data.id, files);
+        // Build response object
+        const threadResponse = new ThreadResponseDto(
+          thread.data.id,
+          thread.data.content,
+          thread.data.visibility,
+          thread.data.media,
+          thread.data.createdAt,
+          thread.data.user,
+          thread.data.updatedAt,
+        );
+
+        return new ResponseDto(
+          threadResponse,
+          'Thread created successfully',
+          201,
+        );
+      });
+
+      return response;
+    } catch (error) {
+      // Rollback file trên MinIO nếu có
+      if (uploadedFileNames.length > 0) {
+        await Promise.all(
+          uploadedFileNames.map((fileName) =>
+            this.minioService.removeFile(
+              process.env.MINIO_BUCKET_NAME,
+              fileName,
+            ),
+          ),
+        );
+        this.logger.warn(
+          `Rolled back ${uploadedFileNames.length} files from MinIO`,
+        );
+      }
+      throw error;
     }
-
-    // Tạo ThreadResponseDto từ thread đã tạo
-    const threadResponse = new ThreadResponseDto(
-      thread.data.id,
-      thread.data.content,
-      thread.data.visibility,
-      thread.data.media,
-      thread.data.createdAt,
-      thread.data.user,
-      thread.data.updatedAt,
-    );
-    this.logger.log(`Thread created successfully with ID: ${thread.data.id}`);
-    console.log(`Thread created successfully with ID: ${thread.data.id}`);
-    return new ResponseDto(threadResponse, 'Thread created successfully', 201);
   }
 
   @Put(':id')

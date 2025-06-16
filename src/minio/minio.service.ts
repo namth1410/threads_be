@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as Minio from 'minio';
+import * as path from 'path';
+import { removeVietnameseTones } from 'src/common/helpers/normalize.helper';
 
 @Injectable()
 export class MinioService {
@@ -16,21 +18,34 @@ export class MinioService {
   }
 
   async uploadFile(bucketName: string, file: Express.Multer.File) {
-    // Thay đổi kiểu cho 'file'
-    const fileName = `${Date.now()}-${file.originalname}`;
+    const originalName = Buffer.from(file.originalname, 'latin1').toString(
+      'utf8',
+    );
+
+    const ext = path.extname(originalName); // ".jpeg"
+
+    const baseName = path.basename(originalName, ext); // "ảnh đẹp"
+
+    // Loại bỏ dấu và ký tự đặc biệt để tránh lỗi với Unicode
+    const safeBaseName = removeVietnameseTones(baseName);
+
+    const fileName = `${Date.now()}-${safeBaseName}${ext}`;
     try {
       await this.minioClient.putObject(bucketName, fileName, file.buffer);
       return fileName;
     } catch (error) {
-      // Ghi log chi tiết lỗi
       console.log(
         `Failed to upload file to bucket "${bucketName}". File name: "${fileName}". Error: ${error.message}`,
         error.stack,
       );
-
-      // Throw lại lỗi để xử lý tiếp tục ở tầng khác nếu cần
       throw new Error(`Upload failed for file "${fileName}": ${error.message}`);
     }
+  }
+
+  getPublicUrl(bucketName: string, fileName: string): string {
+    const baseUrl =
+      process.env.MINIO_PUBLIC_BASE_URL || 'http://127.0.0.1:9004';
+    return `${baseUrl}/${bucketName}/${fileName}`;
   }
 
   async getFileUrl(bucketName: string, fileName: string) {
