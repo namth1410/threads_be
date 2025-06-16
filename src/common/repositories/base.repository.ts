@@ -16,6 +16,10 @@ interface BaseEntity {
 export abstract class BaseRepository<T extends BaseEntity> {
   constructor(private readonly repository: Repository<T>) {}
 
+  createQueryBuilder(alias: string = 'entity') {
+    return this.repository.createQueryBuilder(alias);
+  }
+
   async getAllEntity(
     options?: FindManyOptions<T>,
   ): Promise<PageResponseDto<T>> {
@@ -109,5 +113,21 @@ export abstract class BaseRepository<T extends BaseEntity> {
 
   async find(options?: FindManyOptions<T>): Promise<T[]> {
     return this.repository.find(options);
+  }
+
+  async incrementEntity(
+    criteria: FindOptionsWhere<T>,
+    field: keyof T,
+    value: number,
+  ): Promise<void> {
+    await this.repository.increment(criteria, field as string, value);
+  }
+
+  async decrementEntity(
+    criteria: FindOptionsWhere<T>,
+    field: keyof T,
+    value: number,
+  ): Promise<void> {
+    await this.repository.decrement(criteria, field as string, value);
   }
 }

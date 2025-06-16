@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiExtraModels,
   ApiOkResponse,
   ApiOperation,
@@ -20,6 +21,7 @@ import { ResponseDto } from 'src/common/dto/response.dto';
 import { UserEntity } from 'src/users/user.entity';
 import { Repository } from 'typeorm';
 import { AuthService } from './auth.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto, LoginResponseDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -68,6 +70,42 @@ export class AuthController {
     }
 
     return this.authService.login(user);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password for authenticated user' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully.' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized or invalid password.',
+  })
+  @ApiBody({
+    description: 'Current and new password',
+    type: ChangePasswordDto,
+    examples: {
+      default: {
+        summary: 'Change password example',
+        value: {
+          currentPassword: 'password',
+          newPassword: 'password1',
+        },
+      },
+    },
+  })
+  async changePassword(
+    @Request() req,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ): Promise<ResponseDto<string>> {
+    const userId = req.user.id;
+    console.log(userId);
+    
+    return this.authService.changePassword(
+      userId,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword,
+    );
   }
 
   @Post('refresh')

@@ -1,24 +1,34 @@
 // auth.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { ResponseDto } from 'src/common/dto/response.dto';
 import { UserEntity } from 'src/users/user.entity';
+import { UsersRepository } from 'src/users/users.repository';
 import { Repository } from 'typeorm';
 import { SessionEntity } from '../sessions/session.entity';
 import { UsersService } from '../users/users.service'; // Service quản lý người dùng
 import { LoginResponseDto } from './dto/login.dto';
+import { MailService } from './mail.service';
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(SessionEntity)
-    private sessionRepository: Repository<SessionEntity>,
-    @InjectRepository(UserEntity)
-    private userRepository: Repository<UserEntity>,
-    private usersService: UsersService,
-    private jwtService: JwtService,
+    private readonly sessionRepository: Repository<SessionEntity>,
+    private readonly userRepository: UsersRepository,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
   ) {}
+
+  private async comparePassword(plain: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(plain, hash);
+  }
+
+  private async hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, 10);
+  }
 
   async register(username: string, password: string) {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -61,6 +71,16 @@ export class AuthService {
   async login(user: UserEntity): Promise<ResponseDto<LoginResponseDto>> {
     const { accessToken, refreshToken } = this.generateToken(user);
 
+    const token = this.jwtService.sign(
+      { email: user.email },
+      { expiresIn: '1d' },
+    );
+
+    await this.mailService.sendVerificationEmail(
+      'trancongdinh03012004@gmail.com',
+      token,
+    );
+
     // Xoá session cũ nếu có
     await this.sessionRepository.delete({ userId: user.id });
 
@@ -83,10 +103,38 @@ export class AuthService {
     );
   }
 
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<ResponseDto<string>> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password') // Bắt buộc select password
+      .where('user.id = :id', { id: userId })
+      .getOne();
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isMatch = await this.comparePassword(currentPassword, user.password); // Giả sử bạn có method này
+    if (!isMatch) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    user.password = await this.hashPassword(newPassword); // Giả sử bạn có method này
+    await this.userRepository.updateEntity(userId, user);
+
+    return new ResponseDto(null, 'Password changed successfully');
+  }
+
   async logout(userId: number) {
-    await this.userRepository.update(userId, {
-      tokenVersion: () => 'tokenVersion + 1', // Tăng tokenVersion lên 1
-    });
+    await this.userRepository.incrementEntity(
+      { id: userId },
+      'tokenVersion',
+      1,
+    );
   }
 
   async validateSession(token: string): Promise<any> {
