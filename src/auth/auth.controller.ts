@@ -22,10 +22,12 @@ import { UserEntity } from 'src/users/user.entity';
 import { Repository } from 'typeorm';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto, LoginResponseDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -100,11 +102,55 @@ export class AuthController {
   ): Promise<ResponseDto<string>> {
     const userId = req.user.id;
     console.log(userId);
-    
+
     return this.authService.changePassword(
       userId,
       changePasswordDto.currentPassword,
       changePasswordDto.newPassword,
+    );
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Gửi yêu cầu khôi phục mật khẩu qua email' })
+  @ApiResponse({ status: 200, description: 'Email khôi phục đã được gửi' })
+  @ApiBody({
+    type: ForgotPasswordDto,
+    examples: {
+      default: {
+        summary: 'Ví dụ quên mật khẩu',
+        value: {
+          email: 'example@gmail.com',
+        },
+      },
+    },
+  })
+  async forgotPassword(
+    @Body() forgotPasswordDto: ForgotPasswordDto,
+  ): Promise<ResponseDto<string>> {
+    return this.authService.forgotPassword(forgotPasswordDto.email);
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Đặt lại mật khẩu mới bằng token' })
+  @ApiResponse({ status: 200, description: 'Mật khẩu đã được cập nhật' })
+  @ApiBody({
+    type: ResetPasswordDto,
+    examples: {
+      default: {
+        summary: 'Ví dụ đặt lại mật khẩu',
+        value: {
+          token: 'JWT_TOKEN_TU_EMAIL',
+          newPassword: 'newStrongPassword123',
+        },
+      },
+    },
+  })
+  async resetPassword(
+    @Body() resetPasswordDto: ResetPasswordDto,
+  ): Promise<ResponseDto<string>> {
+    return this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.newPassword,
     );
   }
 

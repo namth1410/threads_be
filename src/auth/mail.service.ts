@@ -18,4 +18,14 @@ export class MailService {
       },
     });
   }
+
+  async sendResetPasswordEmail(email: string, token: string) {
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+
+    await this.mailerService.sendMail({
+      to: email,
+      subject: 'Khôi phục mật khẩu',
+      html: `<p>Nhấn vào liên kết để đặt lại mật khẩu: <a href="${resetLink}">Đặt lại mật khẩu</a></p>`,
+    });
+  }
 }

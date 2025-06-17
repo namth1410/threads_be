@@ -1,5 +1,10 @@
 // auth.service.ts
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -77,7 +82,7 @@ export class AuthService {
     );
 
     await this.mailService.sendVerificationEmail(
-      'trancongdinh03012004@gmail.com',
+      'dangnam141002@gmail.com',
       token,
     );
 
@@ -103,6 +108,11 @@ export class AuthService {
     );
   }
 
+  async setNewPassword(userId: number, newPassword: string): Promise<void> {
+    const hashed = await this.hashPassword(newPassword);
+    await this.userRepository.updateEntity(userId, { password: hashed });
+  }
+
   async changePassword(
     userId: number,
     currentPassword: string,
@@ -123,10 +133,41 @@ export class AuthService {
       throw new UnauthorizedException('Current password is incorrect');
     }
 
-    user.password = await this.hashPassword(newPassword); // Giả sử bạn có method này
-    await this.userRepository.updateEntity(userId, user);
+    await this.setNewPassword(userId, newPassword);
 
     return new ResponseDto(null, 'Password changed successfully');
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.userRepository.findOneByOptions({
+      where: { email },
+    });
+    if (!user) throw new NotFoundException('Email không tồn tại');
+
+    const token = this.jwtService.sign(
+      { email: user.email },
+      { expiresIn: '15m' }, // Token hết hạn sau 15 phút
+    );
+
+    await this.mailService.sendResetPasswordEmail(user.email, token);
+
+    return new ResponseDto(null, 'Đã gửi email khôi phục mật khẩu');
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    try {
+      const payload = this.jwtService.verify(token);
+      const user = await this.userRepository.findOneByOptions({
+        where: { email: payload.email },
+      });
+      if (!user) throw new NotFoundException('Người dùng không tồn tại');
+
+      await this.setNewPassword(user.id, newPassword);
+
+      return new ResponseDto(null, 'Đặt lại mật khẩu thành công');
+    } catch (err) {
+      throw new BadRequestException('Token không hợp lệ hoặc đã hết hạn');
+    }
   }
 
   async logout(userId: number) {
