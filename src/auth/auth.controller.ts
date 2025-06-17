@@ -26,8 +26,8 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto, LoginResponseDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
-import { JwtAuthGuard } from './jwt-auth.guard';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -45,10 +45,7 @@ export class AuthController {
   async register(
     @Body() registerDto: RegisterDto,
   ): Promise<ResponseDto<UserEntity>> {
-    return this.authService.register(
-      registerDto.username,
-      registerDto.password,
-    );
+    return this.authService.register(registerDto);
   }
 
   @ApiExtraModels(ResponseDto, LoginResponseDto) // 👈 Đăng ký model

@@ -39,7 +39,7 @@ config();
         from: '"My App" <your-email@gmail.com>',
       },
       template: {
-        dir: '/home/namth1/threads_be/src/auth/templates',
+        dir: '/home/namth/threads/src/auth/templates',
         adapter: new HandlebarsAdapter(),
         options: {
           strict: true,

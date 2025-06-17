@@ -15,6 +15,7 @@ import { Repository } from 'typeorm';
 import { SessionEntity } from '../sessions/session.entity';
 import { UsersService } from '../users/users.service'; // Service quản lý người dùng
 import { LoginResponseDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { MailService } from './mail.service';
 @Injectable()
 export class AuthService {
@@ -35,12 +36,12 @@ export class AuthService {
     return bcrypt.hash(password, 10);
   }
 
-  async register(username: string, password: string) {
-    const hashedPassword = await bcrypt.hash(password, 10);
+  async register(registerDto: RegisterDto) {
+    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
     return this.usersService.createUser({
-      username,
+      username: registerDto.username,
       password: hashedPassword,
-      displayId: username,
+      displayId: registerDto.username,
     });
   }
 
@@ -76,15 +77,15 @@ export class AuthService {
   async login(user: UserEntity): Promise<ResponseDto<LoginResponseDto>> {
     const { accessToken, refreshToken } = this.generateToken(user);
 
-    const token = this.jwtService.sign(
-      { email: user.email },
-      { expiresIn: '1d' },
-    );
+    // const token = this.jwtService.sign(
+    //   { email: user.email },
+    //   { expiresIn: '1d' },
+    // );
 
-    await this.mailService.sendVerificationEmail(
-      'dangnam141002@gmail.com',
-      token,
-    );
+    // await this.mailService.sendVerificationEmail(
+    //   'dangnam141002@gmail.com',
+    //   token,
+    // );
 
     // Xoá session cũ nếu có
     await this.sessionRepository.delete({ userId: user.id });
@@ -125,12 +126,12 @@ export class AuthService {
       .getOne();
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new BadRequestException('User not found'); // Cũng có thể là NotFoundException
     }
 
-    const isMatch = await this.comparePassword(currentPassword, user.password); // Giả sử bạn có method này
+    const isMatch = await this.comparePassword(currentPassword, user.password);
     if (!isMatch) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new BadRequestException('Current password is incorrect');
     }
 
     await this.setNewPassword(userId, newPassword);
@@ -192,7 +193,7 @@ export class AuthService {
 
     // Tạo accessToken với thời hạn ngắn hơn
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '1h', // accessToken có thời hạn 1 giờ
+      expiresIn: '24h', // accessToken có thời hạn 1 giờ
     });
 
     // Tạo refreshToken với thời hạn dài hơn
