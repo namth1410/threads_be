@@ -19,7 +19,6 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
-  ApiBody,
   ApiConsumes,
   ApiOperation,
   ApiResponse,
@@ -34,6 +33,7 @@ import { Role } from 'src/common/enums/role.enum';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { MinioService } from 'src/minio/minio.service';
 import { UsersService } from 'src/users/users.service';
+import { DataSource } from 'typeorm';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Import guard
 import { CreateThreadDto } from './dto/create-thread.dto';
 import { ThreadResponseDto } from './dto/thread-response.dto';
@@ -41,7 +41,6 @@ import { ThreadsPaginationDto } from './dto/threads-pagination.dto';
 import { UpdateThreadDto } from './dto/update-thread.dto';
 import { ThreadEntity } from './thread.entity'; // Entity cho bài đăng
 import { ThreadsService } from './threads.service';
-import { DataSource } from 'typeorm';
 
 @ApiTags('threads')
 @Controller('threads')
@@ -149,26 +148,6 @@ export class ThreadsController {
   @UseInterceptors(FilesInterceptor('files'))
   @ApiOperation({ summary: 'Create a new thread' })
   @ApiConsumes('multipart/form-data') // Chỉ định kiểu dữ liệu là multipart/form-data
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        content: {
-          type: 'string',
-          description: 'Content of the thread',
-          example: 'This is a sample thread content',
-        },
-        files: {
-          type: 'array',
-          items: {
-            type: 'string',
-            format: 'binary',
-          },
-          description: 'Multiple files (optional)',
-        },
-      },
-    },
-  })
   @ApiResponse({
     status: 201,
     description: 'Thread created successfully.',
@@ -181,8 +160,6 @@ export class ThreadsController {
     @UploadedFiles() files: Express.Multer.File[],
   ): Promise<ResponseDto<ThreadResponseDto>> {
     const userId = req.user.id;
-    this.logger.log(`Creating thread for user ID: ${userId}`);
-
     // Fetch the user entity by ID
     const user = await this.usersService.getUserById(userId); // Adjust according to your service
 

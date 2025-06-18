@@ -8,6 +8,17 @@ export class CreateThreadDto {
   })
   @IsNotEmpty()
   @IsString()
-  @Length(1, 500) // Giới hạn chiều dài của nội dung bài đăng
+  @Length(1, 500)
   content: string;
+
+  @ApiProperty({
+    type: 'array',
+    items: {
+      type: 'string',
+      format: 'binary',
+    },
+    description: 'Multiple files (optional)',
+    required: false,
+  })
+  files?: any; // Không cần validate vì Nest không parse file vào DTO
 }

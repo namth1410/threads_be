@@ -9,7 +9,6 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
-  ApiBody,
   ApiExtraModels,
   ApiOkResponse,
   ApiOperation,
@@ -80,26 +79,11 @@ export class AuthController {
     status: 401,
     description: 'Unauthorized or invalid password.',
   })
-  @ApiBody({
-    description: 'Current and new password',
-    type: ChangePasswordDto,
-    examples: {
-      default: {
-        summary: 'Change password example',
-        value: {
-          currentPassword: 'password',
-          newPassword: 'password1',
-        },
-      },
-    },
-  })
   async changePassword(
     @Request() req,
     @Body() changePasswordDto: ChangePasswordDto,
   ): Promise<ResponseDto<string>> {
     const userId = req.user.id;
-    console.log(userId);
-
     return this.authService.changePassword(
       userId,
       changePasswordDto.currentPassword,
@@ -110,17 +94,6 @@ export class AuthController {
   @Post('forgot-password')
   @ApiOperation({ summary: 'Gửi yêu cầu khôi phục mật khẩu qua email' })
   @ApiResponse({ status: 200, description: 'Email khôi phục đã được gửi' })
-  @ApiBody({
-    type: ForgotPasswordDto,
-    examples: {
-      default: {
-        summary: 'Ví dụ quên mật khẩu',
-        value: {
-          email: 'example@gmail.com',
-        },
-      },
-    },
-  })
   async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
   ): Promise<ResponseDto<string>> {
@@ -130,18 +103,6 @@ export class AuthController {
   @Post('reset-password')
   @ApiOperation({ summary: 'Đặt lại mật khẩu mới bằng token' })
   @ApiResponse({ status: 200, description: 'Mật khẩu đã được cập nhật' })
-  @ApiBody({
-    type: ResetPasswordDto,
-    examples: {
-      default: {
-        summary: 'Ví dụ đặt lại mật khẩu',
-        value: {
-          token: 'JWT_TOKEN_TU_EMAIL',
-          newPassword: 'newStrongPassword123',
-        },
-      },
-    },
-  })
   async resetPassword(
     @Body() resetPasswordDto: ResetPasswordDto,
   ): Promise<ResponseDto<string>> {

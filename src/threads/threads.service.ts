@@ -9,6 +9,7 @@ import { PageResponseDto } from 'src/common/dto/page-response.dto';
 import { ResponseDto } from 'src/common/dto/response.dto';
 import { MediaEntity } from 'src/minio/media.entity';
 import { MinioService } from 'src/minio/minio.service';
+import { UploadQueueService } from 'src/queues/upload-queue.service';
 import { DataSource, EntityManager, Like, Repository } from 'typeorm';
 import { ThreadsPaginationDto } from './dto/threads-pagination.dto';
 import { ThreadEntity } from './thread.entity'; // Giả sử bạn đã có một entity cho Thread
@@ -24,6 +25,7 @@ export class ThreadsService {
     private readonly mediaRepository: Repository<MediaEntity>,
 
     private readonly minioService: MinioService, // Inject MinioService
+    private readonly uploadQueueService: UploadQueueService,
 
     private readonly dataSource: DataSource,
   ) {}
@@ -167,5 +169,10 @@ export class ThreadsService {
     );
 
     await repo.save(entities);
+  }
+
+  async createThreadWithMedia(filePath: string, type: 'image' | 'video') {
+    await this.uploadQueueService.addUploadJob({ filePath, type });
+    // logic tạo thread sau khi đẩy job vào queue
   }
 }
