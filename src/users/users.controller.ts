@@ -43,7 +43,8 @@ export class UsersController {
   async getAllUsers(
     @Query() paginationDto: PaginationDto,
   ): Promise<PageResponseDto<UserEntity>> {
-    return this.usersService.getAllUsers(paginationDto);
+    const { data, meta } = await this.usersService.getAllUsers(paginationDto);
+    return new PageResponseDto(data, meta);
   }
 
   // Phương thức cập nhật người dùng
@@ -61,6 +62,8 @@ export class UsersController {
     @Body() updateUserDto: UpdateUserDto,
   ): Promise<ResponseDto<UserEntity>> {
     const userId = req.user.id; // Lấy ID từ thông tin xác thực
-    return await this.usersService.updateUser(userId, updateUserDto);
+
+    const updated = await this.usersService.updateUser(userId, updateUserDto);
+    return new ResponseDto(updated, 'User updated successfully');
   }
 }

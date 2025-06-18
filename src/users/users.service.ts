@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { PageResponseDto } from 'src/common/dto/page-response.dto';
+import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
-import { ResponseDto } from 'src/common/dto/response.dto';
+import { FindManyOptions, FindOneOptions } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { UsersRepository } from './users.repository';
 
@@ -9,26 +9,60 @@ import { UsersRepository } from './users.repository';
 export class UsersService {
   constructor(private readonly usersRepository: UsersRepository) {}
 
-  async getAllUsers(
-    paginationDto: PaginationDto,
-  ): Promise<PageResponseDto<UserEntity>> {
-    // Gọi phương thức getAllEntity từ UsersRepository và truyền vào paginationDto
-    return this.usersRepository.getAllEntity({
-      skip: (paginationDto.page - 1) * paginationDto.limit,
-      take: paginationDto.limit,
-      order: paginationDto.sortBy
-        ? { [paginationDto.sortBy]: paginationDto.order }
-        : undefined,
-      where: paginationDto.filters,
+  async getByCriteria(
+    options: FindOneOptions<UserEntity>,
+  ): Promise<UserEntity | null> {
+    return this.usersRepository.findOneByOptions(options);
+  }
+
+  async getUserWithPasswordById(id: number): Promise<UserEntity | null> {
+    return this.usersRepository.findOneByOptions({
+      where: { id },
+      select: [
+        'id',
+        'username',
+        'password',
+        'email',
+        'displayId',
+        'role',
+        'createdAt',
+        'updatedAt',
+      ],
     });
   }
 
-  async getUserById(id: number): Promise<ResponseDto<UserEntity> | null> {
-    return this.usersRepository.getEntityById(id); // Sử dụng phương thức từ UsersRepository
+  async getAllUsers(
+    paginationDto: PaginationDto,
+  ): Promise<{ data: UserEntity[]; meta: PaginationMetaDto }> {
+    const { page, limit, sortBy, order, filters } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (filters) {
+      Object.assign(where, filters);
+    }
+
+    const options: FindManyOptions<UserEntity> = {
+      take: limit,
+      skip,
+      order: sortBy ? { [sortBy]: order } : undefined,
+      where,
+    };
+
+    const { data, total } = await this.usersRepository.getAllEntity(options);
+
+    const meta = new PaginationMetaDto(
+      data.length,
+      Math.ceil(total / limit),
+      page,
+      limit,
+    );
+
+    return { data, meta };
   }
 
-  async findByUsername(username: string): Promise<UserEntity | null> {
-    return this.usersRepository.findByUsername(username);
+  async getUserById(id: number): Promise<UserEntity | null> {
+    return this.usersRepository.getEntityByCriteria({ id }); // Sử dụng phương thức từ UsersRepository
   }
 
   async getHashPasswordByUsername(
@@ -49,22 +83,17 @@ export class UsersService {
     });
   }
 
-  async createUser(
-    data: Partial<UserEntity>,
-  ): Promise<ResponseDto<UserEntity>> {
-    const existingUser = await this.usersRepository.findByUsername(
-      data.username,
-    );
+  async createUser(data: Partial<UserEntity>): Promise<UserEntity> {
+    const existingUser = await this.usersRepository.getEntityByCriteria({
+      username: data.username,
+    });
     if (existingUser) {
       throw new ConflictException('Username already exists'); // Ném lỗi nếu username đã tồn tại
     }
     return this.usersRepository.createEntity(data); // Sử dụng phương thức từ UsersRepository
   }
 
-  async updateUser(
-    id: number,
-    data: Partial<UserEntity>,
-  ): Promise<ResponseDto<UserEntity>> {
+  async updateUser(id: number, data: Partial<UserEntity>): Promise<UserEntity> {
     // Kiểm tra xem displayId có tồn tại không
     if (data.displayId) {
       const existingUser = await this.usersRepository.getEntityByCriteria({
@@ -72,7 +101,7 @@ export class UsersService {
       });
 
       if (existingUser && existingUser.id !== id) {
-        throw new Error('Display ID must be unique');
+        throw new ConflictException('Display ID must be unique');
       }
     }
 
@@ -80,14 +109,6 @@ export class UsersService {
   }
 
   async deleteUser(id: number): Promise<void> {
-    await this.usersRepository.deleteEntity(id); // Sử dụng phương thức từ UsersRepository
-  }
-
-  async getAllUserIds(): Promise<number[]> {
-    const users = await this.usersRepository.find({
-      select: ['id'], // Chỉ lấy cột `id`
-    });
-
-    return users.map((user) => user.id); // Trả về danh sách id
+    await this.usersRepository.deleteEntity({ id }); // Sử dụng phương thức từ UsersRepository
   }
 }

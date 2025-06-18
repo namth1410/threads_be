@@ -1,17 +1,14 @@
-// auth.service.ts
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { ResponseDto } from 'src/common/dto/response.dto';
+import { SessionsService } from 'src/sessions/sessions.service';
 import { UserEntity } from 'src/users/user.entity';
 import { UsersRepository } from 'src/users/users.repository';
-import { Repository } from 'typeorm';
 import { SessionEntity } from '../sessions/session.entity';
 import { UsersService } from '../users/users.service'; // Service quản lý người dùng
 import { LoginResponseDto } from './dto/login.dto';
@@ -20,9 +17,8 @@ import { MailService } from './mail.service';
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectRepository(SessionEntity)
-    private readonly sessionRepository: Repository<SessionEntity>,
     private readonly userRepository: UsersRepository,
+    private readonly sessionsService: SessionsService,
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
@@ -58,7 +54,7 @@ export class AuthService {
   async validateRefreshToken(
     refreshToken: string,
   ): Promise<SessionEntity | null> {
-    const session = await this.sessionRepository.findOne({
+    const session = await this.sessionsService.getByCriteria({
       where: { refreshToken },
     });
     if (!session) {
@@ -77,28 +73,15 @@ export class AuthService {
   async login(user: UserEntity): Promise<ResponseDto<LoginResponseDto>> {
     const { accessToken, refreshToken } = this.generateToken(user);
 
-    // const token = this.jwtService.sign(
-    //   { email: user.email },
-    //   { expiresIn: '1d' },
-    // );
-
-    // await this.mailService.sendVerificationEmail(
-    //   'dangnam141002@gmail.com',
-    //   token,
-    // );
-
     // Xoá session cũ nếu có
-    await this.sessionRepository.delete({ userId: user.id });
+    await this.sessionsService.deleteSession({ userId: user.id });
 
     // Tạo session mới
-    const session = this.sessionRepository.create({
+    await this.sessionsService.createSession({
       userId: user.id,
       token: accessToken,
-      refreshToken: refreshToken,
-      expiresAt: new Date(Date.now() + 3600 * 1000 * 24), // 1 giờ
+      refreshToken,
     });
-
-    await this.sessionRepository.save(session);
 
     return new ResponseDto(
       {
@@ -180,7 +163,9 @@ export class AuthService {
   }
 
   async validateSession(token: string): Promise<any> {
-    const session = await this.sessionRepository.findOne({ where: { token } });
+    const session = await this.sessionsService.getByCriteria({
+      where: { token },
+    });
     return session ? session.userId : null;
   }
 

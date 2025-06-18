@@ -10,7 +10,7 @@ export class PageResponseDto<T> {
   constructor(
     data: T[],
     pagination: PaginationMetaDto,
-    message: string,
+    message: string = 'Success',
     statusCode: number = 200,
     success: boolean = true,
   ) {
