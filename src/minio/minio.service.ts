@@ -6,7 +6,6 @@ import { removeVietnameseTones } from 'src/common/helpers/normalize.helper';
 @Injectable()
 export class MinioService {
   private minioClient: Minio.Client;
-
   constructor() {
     this.minioClient = new Minio.Client({
       endPoint: process.env.MINIO_ENDPOINT,

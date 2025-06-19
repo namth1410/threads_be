@@ -15,10 +15,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { InjectRepository } from '@nestjs/typeorm';
 import { ResponseDto } from 'src/common/dto/response.dto';
 import { UserEntity } from 'src/users/user.entity';
-import { Repository } from 'typeorm';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -31,11 +29,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private authService: AuthService,
-    @InjectRepository(UserEntity) // Inject UserRepository thay vì sử dụng UsersService
-    private readonly userRepository: Repository<UserEntity>,
-  ) {}
+  constructor(private authService: AuthService) {}
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' }) // Mô tả ngắn cho endpoint
@@ -44,7 +38,8 @@ export class AuthController {
   async register(
     @Body() registerDto: RegisterDto,
   ): Promise<ResponseDto<UserEntity>> {
-    return this.authService.register(registerDto);
+    const user = await this.authService.register(registerDto);
+    return new ResponseDto(user, 'User registered successfully');
   }
 
   @ApiExtraModels(ResponseDto, LoginResponseDto) // 👈 Đăng ký model
@@ -66,8 +61,8 @@ export class AuthController {
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-
-    return this.authService.login(user);
+    const result = await this.authService.login(user);
+    return new ResponseDto(result, 'User logged in successfully');
   }
 
   @Post('change-password')
@@ -82,13 +77,15 @@ export class AuthController {
   async changePassword(
     @Request() req,
     @Body() changePasswordDto: ChangePasswordDto,
-  ): Promise<ResponseDto<string>> {
+  ): Promise<ResponseDto<null>> {
     const userId = req.user.id;
-    return this.authService.changePassword(
+    await this.authService.changePassword(
       userId,
       changePasswordDto.currentPassword,
       changePasswordDto.newPassword,
     );
+
+    return new ResponseDto(null, 'Password changed successfully');
   }
 
   @Post('forgot-password')
@@ -96,8 +93,9 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Email khôi phục đã được gửi' })
   async forgotPassword(
     @Body() forgotPasswordDto: ForgotPasswordDto,
-  ): Promise<ResponseDto<string>> {
-    return this.authService.forgotPassword(forgotPasswordDto.email);
+  ): Promise<ResponseDto<null>> {
+    await this.authService.forgotPassword(forgotPasswordDto.email);
+    return new ResponseDto(null, 'Email khôi phục đã được gửi');
   }
 
   @Post('reset-password')
@@ -105,27 +103,28 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Mật khẩu đã được cập nhật' })
   async resetPassword(
     @Body() resetPasswordDto: ResetPasswordDto,
-  ): Promise<ResponseDto<string>> {
-    return this.authService.resetPassword(
+  ): Promise<ResponseDto<null>> {
+    await this.authService.resetPassword(
       resetPasswordDto.token,
       resetPasswordDto.newPassword,
     );
+
+    return new ResponseDto(null, 'Mật khẩu đã được cập nhật');
   }
 
   @Post('refresh')
   @ApiOperation({ summary: 'Refresh access token' })
-  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
-    const { refresh_token } = refreshTokenDto;
-    const session = await this.authService.validateRefreshToken(refresh_token);
-    if (!session) {
-      throw new UnauthorizedException();
-    }
-
-    const user = await this.userRepository.findOne({
-      where: { id: session.userId },
-    });
-
-    return this.authService.login(user); // Tạo accessToken mới
+  @ApiOkResponse({
+    description: 'Access token refreshed',
+    type: ResponseDto<LoginResponseDto>,
+  })
+  async refreshToken(
+    @Body() refreshTokenDto: RefreshTokenDto,
+  ): Promise<ResponseDto<LoginResponseDto>> {
+    const result = await this.authService.refreshAccessToken(
+      refreshTokenDto.refresh_token,
+    );
+    return new ResponseDto(result, 'Token refreshed successfully');
   }
 
   @Post('logout')

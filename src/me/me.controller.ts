@@ -3,9 +3,10 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { UserEntity } from 'src/users/user.entity';
-import { MeService } from './me.service';
 import { ResponseDto } from 'src/common/dto/response.dto';
+import { UserEntity } from 'src/users/user.entity';
+import { MeResponseDto } from './dto/me-response.dto';
+import { MeService } from './me.service';
 
 @Controller('me')
 export class MeController {
@@ -13,17 +14,9 @@ export class MeController {
 
   @UseGuards(JwtAuthGuard) // Bảo vệ API với guard JWT
   @Get()
-  async getMe(@Req() request: Request) {
+  async getMe(@Req() request: Request): Promise<ResponseDto<MeResponseDto>> {
     const user = request.user as UserEntity; // Lấy thông tin người dùng từ request.user sau khi JWT đã được xác thực
 
-    // Trả về chỉ các thông tin cần thiết của user
-    return new ResponseDto({
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      displayId: user.displayId,
-      role: user.role,
-      createdAt: user.createdAt,
-    });
+    return new ResponseDto(user);
   }
 }

@@ -2,22 +2,20 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { ResponseDto } from 'src/common/dto/response.dto';
 import { SessionsService } from 'src/sessions/sessions.service';
 import { UserEntity } from 'src/users/user.entity';
-import { UsersRepository } from 'src/users/users.repository';
 import { SessionEntity } from '../sessions/session.entity';
-import { UsersService } from '../users/users.service'; // Service quản lý người dùng
+import { UsersService } from '../users/users.service';
 import { LoginResponseDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { MailService } from './mail.service';
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly userRepository: UsersRepository,
     private readonly sessionsService: SessionsService,
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -70,7 +68,7 @@ export class AuthService {
     }
   }
 
-  async login(user: UserEntity): Promise<ResponseDto<LoginResponseDto>> {
+  async login(user: UserEntity): Promise<LoginResponseDto> {
     const { accessToken, refreshToken } = this.generateToken(user);
 
     // Xoá session cũ nếu có
@@ -83,33 +81,26 @@ export class AuthService {
       refreshToken,
     });
 
-    return new ResponseDto(
-      {
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      },
-      'Login successful',
-    );
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
   }
 
   async setNewPassword(userId: number, newPassword: string): Promise<void> {
     const hashed = await this.hashPassword(newPassword);
-    await this.userRepository.updateEntity(userId, { password: hashed });
+    await this.usersService.updateUser(userId, { password: hashed });
   }
 
   async changePassword(
     userId: number,
     currentPassword: string,
     newPassword: string,
-  ): Promise<ResponseDto<string>> {
-    const user = await this.userRepository
-      .createQueryBuilder('user')
-      .addSelect('user.password') // Bắt buộc select password
-      .where('user.id = :id', { id: userId })
-      .getOne();
+  ): Promise<void> {
+    const user = await this.usersService.getUserWithPasswordById(userId);
 
     if (!user) {
-      throw new BadRequestException('User not found'); // Cũng có thể là NotFoundException
+      throw new BadRequestException('User not found'); // Có thể dùng NotFoundException nếu bạn muốn rõ hơn
     }
 
     const isMatch = await this.comparePassword(currentPassword, user.password);
@@ -118,44 +109,56 @@ export class AuthService {
     }
 
     await this.setNewPassword(userId, newPassword);
-
-    return new ResponseDto(null, 'Password changed successfully');
   }
 
-  async forgotPassword(email: string) {
-    const user = await this.userRepository.findOneByOptions({
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.usersService.findOneByOptions({
       where: { email },
     });
+
     if (!user) throw new NotFoundException('Email không tồn tại');
 
     const token = this.jwtService.sign(
       { email: user.email },
-      { expiresIn: '15m' }, // Token hết hạn sau 15 phút
+      { expiresIn: '15m' },
     );
 
     await this.mailService.sendResetPasswordEmail(user.email, token);
-
-    return new ResponseDto(null, 'Đã gửi email khôi phục mật khẩu');
   }
 
-  async resetPassword(token: string, newPassword: string) {
+  async resetPassword(token: string, newPassword: string): Promise<void> {
     try {
       const payload = this.jwtService.verify(token);
-      const user = await this.userRepository.findOneByOptions({
+      const user = await this.usersService.findOneByOptions({
         where: { email: payload.email },
       });
-      if (!user) throw new NotFoundException('Người dùng không tồn tại');
+
+      if (!user) {
+        throw new NotFoundException('Người dùng không tồn tại');
+      }
 
       await this.setNewPassword(user.id, newPassword);
-
-      return new ResponseDto(null, 'Đặt lại mật khẩu thành công');
     } catch (err) {
       throw new BadRequestException('Token không hợp lệ hoặc đã hết hạn');
     }
   }
 
+  async refreshAccessToken(refreshToken: string): Promise<LoginResponseDto> {
+    const session = await this.validateRefreshToken(refreshToken);
+    if (!session) {
+      throw new UnauthorizedException();
+    }
+
+    const user = await this.usersService.getUserById(session.userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    return this.login(user);
+  }
+
   async logout(userId: number) {
-    await this.userRepository.incrementEntity(
+    await this.usersService.incrementUserField(
       { id: userId },
       'tokenVersion',
       1,

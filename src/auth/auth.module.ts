@@ -11,7 +11,6 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtLoggingMiddleware } from './jwt-logging.middleware';
 import { JwtStrategy } from './jwt.strategy';
-import { LocalStrategy } from './local.strategy';
 import { MailService } from './mail.service';
 
 config();
@@ -47,13 +46,7 @@ config();
       },
     }),
   ],
-  providers: [
-    AuthService,
-    LocalStrategy,
-    JwtStrategy,
-    JwtAuthGuard,
-    MailService,
-  ],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, MailService],
   controllers: [AuthController],
   exports: [AuthService],
 })

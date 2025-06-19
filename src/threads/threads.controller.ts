@@ -52,9 +52,8 @@ export class ThreadsController {
   constructor(
     private readonly dataSource: DataSource,
     private readonly threadsService: ThreadsService,
-    private readonly usersService: UsersService, // Inject UsersService
+    private readonly usersService: UsersService,
     private readonly minioService: MinioService,
-    // @InjectRedis() private readonly redisClient: Redis,
   ) {}
 
   @Get()
@@ -69,13 +68,6 @@ export class ThreadsController {
   async findAll(
     @Query() paginationDto: ThreadsPaginationDto,
   ): Promise<PageResponseDto<ThreadResponseDto>> {
-    // const cacheKey = `threads_page_${paginationDto.page}_limit_${paginationDto.limit}`;
-    // const cachedThreads = await this.redisClient.get(cacheKey);
-
-    // if (cachedThreads) {
-    //   // Trả về dữ liệu từ cache (dạng chuỗi JSON, cần parse lại)
-    //   return JSON.parse(cachedThreads);
-    // }
     const threadsWithPagination =
       await this.threadsService.getAllThreads(paginationDto);
 
@@ -95,7 +87,7 @@ export class ThreadsController {
     // Tạo PageResponseDto
     return new PageResponseDto<ThreadResponseDto>(
       threadResponseDtos,
-      threadsWithPagination.pagination,
+      threadsWithPagination.meta,
       'Threads retrieved successfully',
     );
   }
@@ -139,7 +131,7 @@ export class ThreadsController {
     // Tạo PageResponseDto
     return new PageResponseDto<ThreadResponseDto>(
       threadResponseDtos,
-      threadsWithPagination.pagination,
+      threadsWithPagination.meta,
       'Threads retrieved successfully',
     );
   }
@@ -176,7 +168,7 @@ export class ThreadsController {
         const thread = await this.threadsService.create(
           {
             content: createThreadDto.content,
-            user: user.data,
+            user: user,
           },
           manager, // ⬅️ truyền manager vào
         );
@@ -184,7 +176,7 @@ export class ThreadsController {
         // Gắn media nếu có
         if (files && files.length > 0) {
           const uploadedFiles = await this.threadsService.attachMedia(
-            thread.data.id,
+            thread.id,
             files,
             manager, // ⬅️ truyền manager
           );
@@ -193,13 +185,13 @@ export class ThreadsController {
 
         // Build response object
         const threadResponse = new ThreadResponseDto(
-          thread.data.id,
-          thread.data.content,
-          thread.data.visibility,
-          thread.data.media,
-          thread.data.createdAt,
-          thread.data.user,
-          thread.data.updatedAt,
+          thread.id,
+          thread.content,
+          thread.visibility,
+          thread.media,
+          thread.createdAt,
+          thread.user,
+          thread.updatedAt,
         );
 
         return new ResponseDto(
@@ -245,7 +237,9 @@ export class ThreadsController {
     const threadData: Partial<ThreadEntity> = {
       content: updateThreadDto.content,
     };
-    return this.threadsService.update(id, threadData);
+    const updatedThread = await this.threadsService.update(id, threadData);
+
+    return new ResponseDto(updatedThread, 'Thread updated successfully');
   }
 
   @Delete(':id')

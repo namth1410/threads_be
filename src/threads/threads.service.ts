@@ -4,13 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { PageResponseDto } from 'src/common/dto/page-response.dto';
-import { ResponseDto } from 'src/common/dto/response.dto';
+import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { MediaEntity } from 'src/minio/media.entity';
 import { MinioService } from 'src/minio/minio.service';
 import { UploadQueueService } from 'src/queues/upload-queue.service';
-import { DataSource, EntityManager, Like, Repository } from 'typeorm';
+import { DataSource, EntityManager, Like } from 'typeorm';
 import { ThreadsPaginationDto } from './dto/threads-pagination.dto';
 import { ThreadEntity } from './thread.entity'; // Giả sử bạn đã có một entity cho Thread
 import { ThreadsRepository } from './threads.repository';
@@ -18,28 +16,22 @@ import { ThreadsRepository } from './threads.repository';
 @Injectable()
 export class ThreadsService {
   constructor(
-    // @InjectRepository(ThreadEntity)
     private threadsRepository: ThreadsRepository,
-
-    @InjectRepository(MediaEntity)
-    private readonly mediaRepository: Repository<MediaEntity>,
-
-    private readonly minioService: MinioService, // Inject MinioService
+    private readonly minioService: MinioService,
     private readonly uploadQueueService: UploadQueueService,
-
     private readonly dataSource: DataSource,
   ) {}
 
   async getAllThreads(
     paginationDto: ThreadsPaginationDto,
-  ): Promise<PageResponseDto<ThreadEntity>> {
+  ): Promise<{ data: ThreadEntity[]; meta: PaginationMetaDto }> {
     const filters: any = { ...paginationDto.filters }; // Lấy các bộ lọc hiện có
 
     if (paginationDto.content) {
       filters.content = Like(`%${paginationDto.content}%`); // Thêm điều kiện lọc cho nội dung
     }
 
-    return this.threadsRepository.getAllEntity({
+    const { data, total } = await this.threadsRepository.getAllEntity({
       skip: (paginationDto.page - 1) * paginationDto.limit,
       take: paginationDto.limit,
       order: paginationDto.sortBy
@@ -48,15 +40,24 @@ export class ThreadsService {
       where: filters,
       relations: ['media', 'user'],
     });
+
+    const meta = new PaginationMetaDto(
+      data.length,
+      Math.ceil(total / paginationDto.limit),
+      paginationDto.page,
+      paginationDto.limit,
+    );
+
+    return { data, meta };
   }
 
   async create(
     threadData: Partial<ThreadEntity>,
     manager?: EntityManager,
-  ): Promise<ResponseDto<ThreadEntity>> {
+  ): Promise<ThreadEntity> {
     if (manager) {
       const saved = await manager.getRepository(ThreadEntity).save(threadData);
-      return new ResponseDto(saved, 'Thread created', 201);
+      return saved;
     }
 
     // Nếu không có manager, dùng repository mặc định
@@ -67,7 +68,7 @@ export class ThreadsService {
   async update(
     id: number,
     threadData: Partial<ThreadEntity>,
-  ): Promise<ResponseDto<ThreadEntity> | null> {
+  ): Promise<ThreadEntity> {
     return this.threadsRepository.updateEntity(id, threadData);
   }
 
@@ -153,11 +154,9 @@ export class ThreadsService {
       type: string;
       fileName: string;
     }[],
-    manager?: EntityManager,
+    manager: EntityManager,
   ) {
-    const repo = manager
-      ? manager.getRepository(MediaEntity)
-      : this.mediaRepository;
+    const repo = manager.getRepository(MediaEntity);
 
     const entities = mediaList.map((media) =>
       repo.create({

@@ -63,13 +63,12 @@ export class NotificationsController {
     @Query() paginationDto: PaginationDto, // Thông tin phân trang
     @Query('status') status?: string, // Lọc theo trạng thái thông báo
   ): Promise<PageResponseDto<NotificationEntity>> {
-    const notificationsWithPagination =
-      await this.notificationService.getAllNotifications({
-        ...paginationDto,
-        filters: status ? { status } : undefined, // Chỉ thêm filter nếu có trạng thái
-      });
+    const { data, meta } = await this.notificationService.getAllNotifications({
+      ...paginationDto,
+      filters: status ? { status } : undefined,
+    });
 
-    return notificationsWithPagination;
+    return new PageResponseDto(data, meta);
   }
 
   @Get('read-all/:userId')

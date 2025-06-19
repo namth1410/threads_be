@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
-import { FindManyOptions, FindOneOptions } from 'typeorm';
+import { FindManyOptions, FindOneOptions, FindOptionsWhere } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { UsersRepository } from './users.repository';
 
@@ -10,6 +10,12 @@ export class UsersService {
   constructor(private readonly usersRepository: UsersRepository) {}
 
   async getByCriteria(
+    criteria: FindOptionsWhere<UserEntity>,
+  ): Promise<UserEntity | null> {
+    return this.usersRepository.getEntityByCriteria(criteria);
+  }
+
+  async findOneByOptions(
     options: FindOneOptions<UserEntity>,
   ): Promise<UserEntity | null> {
     return this.usersRepository.findOneByOptions(options);
@@ -110,5 +116,13 @@ export class UsersService {
 
   async deleteUser(id: number): Promise<void> {
     await this.usersRepository.deleteEntity({ id }); // Sử dụng phương thức từ UsersRepository
+  }
+
+  async incrementUserField(
+    criteria: FindOptionsWhere<UserEntity>,
+    field: keyof UserEntity,
+    value: number,
+  ): Promise<void> {
+    await this.usersRepository.incrementEntity(criteria, field, value);
   }
 }

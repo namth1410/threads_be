@@ -107,6 +107,7 @@ services:
 networks:
   threads_network:
     driver: bridge
+    attachable: true
 volumes:
   postgres-data:
   minio-data:

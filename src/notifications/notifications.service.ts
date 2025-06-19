@@ -3,12 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { PageResponseDto } from 'src/common/dto/page-response.dto';
+import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
-import { ResponseDto } from 'src/common/dto/response.dto';
-import { UserEntity } from 'src/users/user.entity';
-import { UsersService } from 'src/users/users.service';
+import { FindManyOptions } from 'typeorm';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { CreateNotificationsDto } from './dto/create-notifications.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
@@ -22,8 +19,6 @@ export class NotificationsService {
   constructor(
     private readonly notificationsRepository: NotificationsRepository,
     private readonly notificationGateway: NotificationGateway,
-    @InjectRepository(UserEntity)
-    private readonly userService: UsersService,
   ) {}
 
   async createNotifications(
@@ -37,7 +32,7 @@ export class NotificationsService {
     // Xử lý danh sách recipientIds
     if (sendToAll) {
       // Lấy danh sách tất cả người dùng (Giả sử userService có phương thức này)
-      recipients = await this.userService.getAllUserIds(); // Thay `getAllUserIds` bằng phương thức thực tế
+      recipients = []; // Thay `getAllUserIds` bằng phương thức thực tế
     } else {
       if (!recipientIds || recipientIds.length === 0) {
         throw new BadRequestException(
@@ -58,13 +53,10 @@ export class NotificationsService {
           status: NotificationStatus.SENT,
         });
 
-        console.log(`notification`);
-        console.log(notification);
-
         // Gửi thông báo qua WebSocket tới từng người dùng
         this.notificationGateway.sendNotificationToUser(
           recipientId,
-          notification.data.title,
+          notification.title,
         );
 
         return notification;
@@ -77,28 +69,45 @@ export class NotificationsService {
 
   async createNotification(
     createNotificationDto: CreateNotificationDto,
-  ): Promise<ResponseDto<NotificationEntity>> {
+  ): Promise<NotificationEntity> {
     return this.notificationsRepository.createEntity(createNotificationDto);
   }
 
   async getAllNotifications(
     paginationDto: PaginationDto,
-  ): Promise<PageResponseDto<NotificationEntity>> {
-    // Gọi phương thức getAllEntity từ notificationsRepository và truyền vào paginationDto
-    return this.notificationsRepository.getAllEntity({
-      skip: (paginationDto.page - 1) * paginationDto.limit,
-      take: paginationDto.limit,
-      order: paginationDto.sortBy
-        ? { [paginationDto.sortBy]: paginationDto.order }
-        : undefined,
-      where: paginationDto.filters,
-    });
+  ): Promise<{ data: NotificationEntity[]; meta: PaginationMetaDto }> {
+    const { page, limit, sortBy, order, filters } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (filters) {
+      Object.assign(where, filters);
+    }
+
+    const options: FindManyOptions<NotificationEntity> = {
+      take: limit,
+      skip,
+      order: sortBy ? { [sortBy]: order } : undefined,
+      where,
+    };
+
+    const { data, total } =
+      await this.notificationsRepository.getAllEntity(options);
+
+    const meta = new PaginationMetaDto(
+      data.length,
+      Math.ceil(total / limit),
+      page,
+      limit,
+    );
+
+    return { data, meta };
   }
 
   async updateNotification(
     id: number,
     updateNotificationDto: UpdateNotificationDto,
-  ): Promise<ResponseDto<NotificationEntity>> {
+  ): Promise<NotificationEntity> {
     const notification = await this.notificationsRepository.getEntityByCriteria(
       {
         id: id,
@@ -114,9 +123,7 @@ export class NotificationsService {
 
   async markAllAsRead(userId: number): Promise<void> {
     // Tìm tất cả các thông báo chưa đọc (status = UNREAD) của người dùng
-    const unreadNotifications = await this.notificationsRepository.find({
-      where: { recipientId: userId },
-    });
+    const unreadNotifications = [];
 
     if (unreadNotifications.length === 0) {
       throw new Error('No unread notifications found for this user');
@@ -134,6 +141,6 @@ export class NotificationsService {
   }
 
   async deleteNotification(id: number): Promise<void> {
-    await this.notificationsRepository.deleteEntity(id);
+    await this.notificationsRepository.deleteEntity({ id });
   }
 }
