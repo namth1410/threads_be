@@ -16,7 +16,7 @@ import { ThreadsRepository } from './threads.repository';
 @Injectable()
 export class ThreadsService {
   constructor(
-    private threadsRepository: ThreadsRepository,
+    private readonly threadsRepository: ThreadsRepository,
     private readonly minioService: MinioService,
     private readonly uploadQueueService: UploadQueueService,
     private readonly dataSource: DataSource,
@@ -110,39 +110,43 @@ export class ThreadsService {
     files: Express.Multer.File[],
     manager?: EntityManager,
   ): Promise<string[]> {
-    const bucketName = process.env.MINIO_BUCKET_NAME;
     const uploadedFiles: string[] = [];
 
     try {
       const mediaEntities = await Promise.all(
         files.map(async (file) => {
-          const fileName = await this.minioService.uploadFile(bucketName, file);
-          uploadedFiles.push(fileName); // để rollback nếu lỗi
-
-          const fileUrl = await this.minioService.getPublicUrl(
-            bucketName,
-            fileName,
-          );
+          const fileName = file.filename;
           const type = file.mimetype.startsWith('image') ? 'image' : 'video';
+
+          uploadedFiles.push(fileName); // để rollback nếu cần
 
           return {
             threadId,
-            url: fileUrl,
+            url: '', // chưa có URL vì chưa upload
             type,
             fileName,
+            localPath: file.path,
           };
         }),
       );
 
-      await this.bulkAddMediaToThread(mediaEntities, manager); // truyền manager vào
+      // Tạo media records trong DB, để worker update lại `url` sau
+      await this.bulkAddMediaToThread(mediaEntities, manager);
+
+      // Push vào BullMQ để upload file
+      for (const media of mediaEntities) {
+        await this.uploadQueueService.addUploadJob({
+          filePath: media.localPath,
+          type: media.type,
+          fileName: media.fileName,
+          bucket: process.env.MINIO_BUCKET_NAME,
+          threadId: media.threadId,
+        });
+      }
+
       return uploadedFiles;
     } catch (error) {
-      // Rollback MinIO files
-      await Promise.all(
-        uploadedFiles.map((fileName) =>
-          this.minioService.removeFile(bucketName, fileName),
-        ),
-      );
+      // rollback file local nếu cần (tuỳ chiến lược của bạn)
       throw error;
     }
   }
@@ -168,10 +172,5 @@ export class ThreadsService {
     );
 
     await repo.save(entities);
-  }
-
-  async createThreadWithMedia(filePath: string, type: 'image' | 'video') {
-    await this.uploadQueueService.addUploadJob({ filePath, type });
-    // logic tạo thread sau khi đẩy job vào queue
   }
 }

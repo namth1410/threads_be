@@ -1,8 +1,9 @@
-import { Worker } from 'bullmq';
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import * as Minio from 'minio';
-import * as path from 'path';
+import { Worker } from 'bullmq';
 import * as fs from 'fs';
+import * as Minio from 'minio';
+import { AppDataSource } from 'src/db/data-source';
+import { MediaEntity } from 'src/minio/media.entity';
 
 @Injectable()
 export class UploadProcessor implements OnModuleInit {
@@ -22,17 +23,38 @@ export class UploadProcessor implements OnModuleInit {
     new Worker(
       'upload-media',
       async (job) => {
-        const { filePath, type } = job.data;
-        const fileStream = fs.createReadStream(filePath);
-        const fileName = path.basename(filePath);
+        try {
+          const { filePath, type, fileName, bucket, threadId } = job.data;
 
-        await this.minioClient.putObject(
-          process.env.MINIO_BUCKET_NAME || 'threads',
-          fileName,
-          fileStream,
-        );
+          if (!fs.existsSync(filePath)) {
+            throw new Error(`File not found at path: ${filePath}`);
+          }
 
-        console.log(`Uploaded ${type}: ${fileName}`);
+          const fileStream = fs.createReadStream(filePath);
+          await this.minioClient.putObject(bucket, fileName, fileStream);
+
+          const fileUrl = await this.minioClient.presignedGetObject(
+            bucket,
+            fileName,
+            24 * 60 * 60,
+          );
+
+          if (!AppDataSource.isInitialized) {
+            await AppDataSource.initialize();
+          }
+
+          const mediaRepo = AppDataSource.getRepository(MediaEntity);
+
+          await mediaRepo.update(
+            { fileName, thread: { id: threadId } },
+            { url: fileUrl },
+          );
+
+          fs.unlinkSync(filePath); // clean up
+        } catch (err) {
+          console.error('Upload job failed:', err);
+          // Có thể gửi email alert hoặc retry tùy config BullMQ
+        }
       },
       {
         connection: {

@@ -6,7 +6,13 @@ import { Queue } from 'bullmq';
 export class UploadQueueService {
   constructor(@Inject('UPLOAD_QUEUE') private readonly uploadQueue: Queue) {}
 
-  async addUploadJob(data: { filePath: string; type: 'image' | 'video' }) {
+  async addUploadJob(data: {
+    filePath: string;
+    type: string;
+    fileName: string;
+    bucket: string;
+    threadId: number;
+  }) {
     await this.uploadQueue.add('upload', data);
   }
 }

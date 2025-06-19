@@ -68,10 +68,10 @@ export class ThreadsController {
   async findAll(
     @Query() paginationDto: ThreadsPaginationDto,
   ): Promise<PageResponseDto<ThreadResponseDto>> {
-    const threadsWithPagination =
+    const { data, meta } =
       await this.threadsService.getAllThreads(paginationDto);
 
-    const threadResponseDtos = threadsWithPagination.data.map(
+    const threadResponseDtos = data.map(
       (thread) =>
         new ThreadResponseDto(
           thread.id,
@@ -87,7 +87,7 @@ export class ThreadsController {
     // Tạo PageResponseDto
     return new PageResponseDto<ThreadResponseDto>(
       threadResponseDtos,
-      threadsWithPagination.meta,
+      meta,
       'Threads retrieved successfully',
     );
   }
@@ -160,8 +160,6 @@ export class ThreadsController {
       throw new NotFoundException('User not found'); // Handle user not found scenario
     }
 
-    // List file đã upload để rollback nếu cần
-    const uploadedFileNames: string[] = [];
     try {
       const response = await this.dataSource.transaction(async (manager) => {
         // Tạo thread (pass manager vào để dùng trong transaction)
@@ -175,12 +173,11 @@ export class ThreadsController {
 
         // Gắn media nếu có
         if (files && files.length > 0) {
-          const uploadedFiles = await this.threadsService.attachMedia(
+          await this.threadsService.attachMedia(
             thread.id,
             files,
             manager, // ⬅️ truyền manager
           );
-          uploadedFileNames.push(...uploadedFiles); // dùng để rollback nếu lỗi DB sau đó
         }
 
         // Build response object
@@ -203,20 +200,6 @@ export class ThreadsController {
 
       return response;
     } catch (error) {
-      // Rollback file trên MinIO nếu có
-      if (uploadedFileNames.length > 0) {
-        await Promise.all(
-          uploadedFileNames.map((fileName) =>
-            this.minioService.removeFile(
-              process.env.MINIO_BUCKET_NAME,
-              fileName,
-            ),
-          ),
-        );
-        this.logger.warn(
-          `Rolled back ${uploadedFileNames.length} files from MinIO`,
-        );
-      }
       throw error;
     }
   }

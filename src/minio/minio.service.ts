@@ -42,9 +42,7 @@ export class MinioService {
   }
 
   getPublicUrl(bucketName: string, fileName: string): string {
-    const baseUrl =
-      process.env.MINIO_PUBLIC_BASE_URL || 'http://127.0.0.1:9004';
-    return `${baseUrl}/${bucketName}/${fileName}`;
+    return `/${bucketName}/${fileName}`;
   }
 
   async getFileUrl(bucketName: string, fileName: string) {
