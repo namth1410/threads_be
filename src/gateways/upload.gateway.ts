@@ -20,4 +20,9 @@ export class UploadGateway implements OnGatewayInit {
     console.log(`[Socket] Emitting to thread ${threadId}:`, fileUrl); // ✅ log tại đây
     this.server.emit(`upload-complete-${threadId}`, { fileUrl });
   }
+
+  notifyUploadFailed(threadId: number, reason: string) {
+    console.log(`[Socket] ❌ Upload failed: thread ${threadId}`, reason);
+    this.server.emit(`upload-failed-${threadId}`, { reason });
+  }
 }
