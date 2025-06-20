@@ -13,6 +13,9 @@ export class UploadQueueService {
     bucket: string;
     threadId: number;
   }) {
-    await this.uploadQueue.add('upload', data);
+    await this.uploadQueue.add('upload', data, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 3000 },
+    });
   }
 }

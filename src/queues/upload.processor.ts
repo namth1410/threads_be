@@ -1,15 +1,17 @@
+// src/processors/upload.processor.ts
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Worker } from 'bullmq';
 import * as fs from 'fs';
 import * as Minio from 'minio';
 import { AppDataSource } from 'src/db/data-source';
+import { UploadGateway } from 'src/gateways/upload.gateway';
 import { MediaEntity } from 'src/minio/media.entity';
 
 @Injectable()
 export class UploadProcessor implements OnModuleInit {
   private minioClient: Minio.Client;
 
-  constructor() {
+  constructor(private readonly uploadGateway: UploadGateway) {
     this.minioClient = new Minio.Client({
       endPoint: process.env.MINIO_ENDPOINT || '127.0.0.1',
       port: Number(process.env.MINIO_PORT) || 9004,
@@ -51,9 +53,12 @@ export class UploadProcessor implements OnModuleInit {
           );
 
           fs.unlinkSync(filePath); // clean up
+
+          // 🔔 Thông báo về client qua socket
+          this.uploadGateway.notifyUploadComplete(threadId, fileUrl);
         } catch (err) {
           console.error('Upload job failed:', err);
-          // Có thể gửi email alert hoặc retry tùy config BullMQ
+          throw err; // Để BullMQ tự động retry nếu có cấu hình
         }
       },
       {
