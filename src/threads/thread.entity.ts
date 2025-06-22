@@ -1,6 +1,7 @@
 import { MediaEntity } from 'src/minio/media.entity';
 import {
   Column,
+  CreateDateColumn,
   DeleteDateColumn,
   Entity,
   ManyToOne,
@@ -43,7 +44,7 @@ export class ThreadEntity {
   })
   media: MediaEntity[];
 
-  @Column({ default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt: Date;
 
   @UpdateDateColumn()

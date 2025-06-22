@@ -14,7 +14,12 @@ export class SessionsService {
   }
 
   async deleteSession(criteria: Partial<SessionEntity>): Promise<void> {
-    await this.sessionsRepository.deleteEntity(criteria);
+    const session = await this.sessionsRepository.getEntityByCriteria(criteria);
+    if (!session) {
+      // Không ném lỗi nếu không có session
+      return;
+    }
+    await this.sessionsRepository.deleteEntity({ id: session.id });
   }
 
   async createSession(params: {
