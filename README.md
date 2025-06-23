@@ -62,3 +62,8 @@ docker run \
 
 
 transaction cho chỗ tạo thread
+
+xóa mềm thread
+
+điều chỉnh quyền riêng tư thread
+

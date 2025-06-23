@@ -31,7 +31,6 @@ import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { ResponseDto } from 'src/common/dto/response.dto';
 import { Role } from 'src/common/enums/role.enum';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { MinioService } from 'src/minio/minio.service';
 import { UsersService } from 'src/users/users.service';
 import { DataSource } from 'typeorm';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Import guard
@@ -53,7 +52,6 @@ export class ThreadsController {
     private readonly dataSource: DataSource,
     private readonly threadsService: ThreadsService,
     private readonly usersService: UsersService,
-    private readonly minioService: MinioService,
   ) {}
 
   @Get()
