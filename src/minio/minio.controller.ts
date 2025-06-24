@@ -41,7 +41,10 @@ export class MinioController {
   async getPresignedUrl(
     @Query('fileName') fileName: string,
   ): Promise<ResponseDto<PresignedUrlDto>> {
-    const url = await this.minioService.getFileUrl('threads', fileName);
+    const url = await this.minioService.getFileUrl(
+      process.env.MINIO_BUCKET_NAME ?? 'threads',
+      fileName,
+    );
     return new ResponseDto<PresignedUrlDto>(
       { url },
       'URL created successfully',
