@@ -48,7 +48,8 @@ steps:
   - name: build-and-push-to-dockerhub
     image: plugins/docker
     settings:
-      repo: dangnam141002/threads-be
+      repo:
+        from_secret: image_repo
       tags: 1.0.0-${DRONE_COMMIT_SHA:0:7}
       username:
         from_secret: dockerhub_username
