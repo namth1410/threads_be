@@ -7,7 +7,6 @@ import {
 import { PaginationMetaDto } from 'src/common/dto/pagination-meta.dto';
 import { MediaEntity } from 'src/minio/media.entity';
 import { MinioService } from 'src/minio/minio.service';
-import { UploadQueueService } from 'src/queues/upload-queue.service';
 import { DataSource, EntityManager, Like } from 'typeorm';
 import { ThreadsPaginationDto } from './dto/threads-pagination.dto';
 import { ThreadEntity } from './thread.entity'; // Giả sử bạn đã có một entity cho Thread
@@ -18,7 +17,6 @@ export class ThreadsService {
   constructor(
     private readonly threadsRepository: ThreadsRepository,
     private readonly minioService: MinioService,
-    private readonly uploadQueueService: UploadQueueService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -110,67 +108,42 @@ export class ThreadsService {
     files: Express.Multer.File[],
     manager?: EntityManager,
   ): Promise<string[]> {
-    const uploadedFiles: string[] = [];
+    const uploadedFileNames: string[] = [];
 
-    try {
-      const mediaEntities = await Promise.all(
-        files.map(async (file) => {
-          const fileName = file.filename;
-          const type = file.mimetype.startsWith('image') ? 'image' : 'video';
-
-          uploadedFiles.push(fileName); // để rollback nếu cần
-
-          return {
-            threadId,
-            url: '', // chưa có URL vì chưa upload
-            type,
-            fileName,
-            localPath: file.path,
-          };
-        }),
-      );
-
-      // Tạo media records trong DB, để worker update lại `url` sau
-      await this.bulkAddMediaToThread(mediaEntities, manager);
-
-      // Push vào BullMQ để upload file
-      for (const media of mediaEntities) {
-        await this.uploadQueueService.addUploadJob({
-          filePath: media.localPath,
-          type: media.type,
-          fileName: media.fileName,
-          bucket: process.env.MINIO_BUCKET_NAME,
-          threadId: media.threadId,
-        });
-      }
-
-      return uploadedFiles;
-    } catch (error) {
-      // rollback file local nếu cần (tuỳ chiến lược của bạn)
-      throw error;
+    if (!manager) {
+      manager = this.dataSource.manager;
     }
-  }
 
-  async bulkAddMediaToThread(
-    mediaList: {
-      threadId: number;
-      url: string;
-      type: string;
-      fileName: string;
-    }[],
-    manager: EntityManager,
-  ) {
+    const bucketName = process.env.MINIO_BUCKET_NAME;
+
     const repo = manager.getRepository(MediaEntity);
 
-    const entities = mediaList.map((media) =>
-      repo.create({
-        url: media.url,
-        type: media.type,
-        fileName: media.fileName, // bạn đang bị lỗi chỗ này: `fileName: media.type` sai!
-        thread: { id: media.threadId },
-      }),
-    );
+    for (const file of files) {
+      // Upload trực tiếp lên MinIO từ bộ nhớ
+      const storedFileName = await this.minioService.uploadFile(
+        bucketName,
+        file,
+      );
 
-    await repo.save(entities);
+      uploadedFileNames.push(storedFileName);
+
+      const type = file.mimetype.startsWith('image') ? 'image' : 'video';
+
+      const publicUrl = this.minioService.getPublicUrl(
+        bucketName,
+        storedFileName,
+      );
+
+      const media = repo.create({
+        url: publicUrl,
+        type,
+        fileName: storedFileName,
+        thread: { id: threadId } as any,
+      });
+
+      await repo.save(media);
+    }
+
+    return uploadedFileNames;
   }
 }

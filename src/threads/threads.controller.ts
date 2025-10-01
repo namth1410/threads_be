@@ -169,13 +169,9 @@ export class ThreadsController {
           manager, // ⬅️ truyền manager vào
         );
 
-        // Gắn media nếu có
+        // Gắn media trực tiếp nếu có
         if (files && files.length > 0) {
-          await this.threadsService.attachMedia(
-            thread.id,
-            files,
-            manager, // ⬅️ truyền manager
-          );
+          await this.threadsService.attachMedia(thread.id, files, manager);
         }
 
         // Build response object

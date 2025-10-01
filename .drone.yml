@@ -1,0 +1,106 @@
+kind: pipeline
+type: kubernetes
+name: build-push-and-update-infra
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+
+steps:
+  # === BƯỚC 0: DEBUG SECRETS ===
+  - name: debug-secrets
+    image: alpine
+    environment:
+      DOCKERHUB_USERNAME:
+        from_secret: dockerhub_username
+      DOCKERHUB_PASSWORD:
+        from_secret: dockerhub_password
+      GITHUB_TOKEN:
+        from_secret: github_token
+      IMAGE_REPO:
+        from_secret: image_repo
+      OVERLAY_PATH:
+        from_secret: overlay_path
+    commands:
+      - echo "🔎 Debug secrets..."
+      - |
+        if [ -z "$DOCKERHUB_USERNAME" ]; then
+          echo "❌ DOCKERHUB_USERNAME is EMPTY";
+        else
+          echo "✅ DOCKERHUB_USERNAME is set (length: ${#DOCKERHUB_USERNAME}, value: ${DOCKERHUB_USERNAME})";
+        fi
+        if [ -z "$DOCKERHUB_PASSWORD" ]; then
+          echo "❌ DOCKERHUB_PASSWORD is EMPTY";
+        else
+          echo "✅ DOCKERHUB_PASSWORD is set (length: ${#DOCKERHUB_PASSWORD}, first 4 chars: ${DOCKERHUB_PASSWORD:0:4})";
+        fi
+        if [ -z "$GITHUB_TOKEN" ]; then
+          echo "❌ GITHUB_TOKEN is EMPTY";
+        else
+          echo "✅ GITHUB_TOKEN is set (length: ${#GITHUB_TOKEN}, first 4 chars: ${GITHUB_TOKEN:0:4})";
+        fi
+        echo "IMAGE_REPO=${IMAGE_REPO:-dangnam141002/threads-be}"
+        echo "OVERLAY_PATH=${OVERLAY_PATH:-threads-infra/manifests/overlays/dev/api}"
+
+  # === BƯỚC 1: BUILD VÀ PUSH IMAGE LÊN DOCKER HUB ===
+  - name: build-and-push-to-dockerhub
+    image: plugins/docker
+    settings:
+      repo: ${IMAGE_REPO}
+      tags: 1.0.0-${DRONE_COMMIT_SHA:0:7}
+      username:
+        from_secret: dockerhub_username
+      password:
+        from_secret: dockerhub_password
+      dockerfile: Dockerfile
+      context: /drone/src
+    environment:
+      IMAGE_REPO:
+        from_secret: image_repo
+    depends_on:
+      - debug-secrets
+
+  # === BƯỚC 2: CẬP NHẬT IMAGE TAG TRONG REPO INFRA ===
+  - name: deploy
+    image: line/kubectl-kustomize:1.31.0-5.7.1
+    environment:
+      REPO_URL:
+        from_secret: repo_url
+      IMAGE_REPO:
+        from_secret: image_repo
+      OVERLAY_PATH:
+        from_secret: overlay_path
+    commands:
+      # 0. Cài thêm git vì image này không có sẵn
+      - apk add --no-cache git
+
+      # 1. Cấu hình thông tin người commit
+      - git config --global user.name "namth1410"
+      - git config --global user.email "tranhainam1410@gmail.com"
+
+      # 2. Clone repo infra sử dụng token
+      - git clone $REPO_URL
+
+      # 3. Di chuyển vào đúng thư mục overlay cần cập nhật
+      - cd ${OVERLAY_PATH:-threads-infra/manifests/overlays/dev/api}
+
+      # 4. Dùng kustomize để cập nhật image tag mới
+      - |
+        IMAGE_REPO=${IMAGE_REPO:-dangnam141002/threads-be}
+        kustomize edit set image ${IMAGE_REPO}:latest=${IMAGE_REPO}:1.0.0-${DRONE_COMMIT_SHA:0:7}
+
+      # 5. Quay lại thư mục gốc của repo
+      - cd ../../../../
+
+      # 6. Add, commit và push thay đổi lên repo infra
+      - git add .
+      - 'git commit -m "ci: Update image for api to tag 1.0.0-${DRONE_COMMIT_SHA:0:7}"'
+
+      - git remote set-url origin $REPO_URL
+      - git push origin main
+    depends_on:
+      - build-and-push-to-dockerhub
+
+
