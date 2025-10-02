@@ -9,41 +9,6 @@ trigger:
     - push
 
 steps:
-  # === BƯỚC 0: DEBUG SECRETS ===
-  - name: debug-secrets
-    image: alpine
-    environment:
-      DOCKERHUB_USERNAME:
-        from_secret: dockerhub_username
-      DOCKERHUB_PASSWORD:
-        from_secret: dockerhub_password
-      GITHUB_TOKEN:
-        from_secret: github_token
-      IMAGE_REPO:
-        from_secret: image_repo
-      OVERLAY_PATH:
-        from_secret: overlay_path
-    commands:
-      - echo "🔎 Debug secrets..."
-      - |
-        if [ -z "$DOCKERHUB_USERNAME" ]; then
-          echo "❌ DOCKERHUB_USERNAME is EMPTY";
-        else
-          echo "✅ DOCKERHUB_USERNAME is set (length: ${#DOCKERHUB_USERNAME}, value: ${DOCKERHUB_USERNAME})";
-        fi
-        if [ -z "$DOCKERHUB_PASSWORD" ]; then
-          echo "❌ DOCKERHUB_PASSWORD is EMPTY";
-        else
-          echo "✅ DOCKERHUB_PASSWORD is set (length: ${#DOCKERHUB_PASSWORD}, first 4 chars: ${DOCKERHUB_PASSWORD:0:4})";
-        fi
-        if [ -z "$GITHUB_TOKEN" ]; then
-          echo "❌ GITHUB_TOKEN is EMPTY";
-        else
-          echo "✅ GITHUB_TOKEN is set (length: ${#GITHUB_TOKEN}, first 4 chars: ${GITHUB_TOKEN:0:4})";
-        fi
-        echo "IMAGE_REPO=${IMAGE_REPO:-dangnam141002/threads-be}"
-        echo "OVERLAY_PATH=${OVERLAY_PATH:-threads-infra/manifests/overlays/dev/api}"
-
   # === BƯỚC 1: BUILD VÀ PUSH IMAGE LÊN DOCKER HUB ===
   - name: build-and-push-to-dockerhub
     image: plugins/docker
@@ -57,8 +22,6 @@ steps:
         from_secret: dockerhub_password
       dockerfile: Dockerfile
       context: /drone/src
-    depends_on:
-      - debug-secrets
 
   # === BƯỚC 2: CẬP NHẬT IMAGE TAG TRONG REPO INFRA ===
   - name: deploy
@@ -82,12 +45,11 @@ steps:
       - git clone $REPO_URL
 
       # 3. Di chuyển vào đúng thư mục overlay cần cập nhật
-      - cd ${OVERLAY_PATH:-threads-infra/manifests/overlays/dev/api}
+      - cd threads-infra/manifests/overlays/dev/api
 
       # 4. Dùng kustomize để cập nhật image tag mới
       - |
-        IMAGE_REPO=${IMAGE_REPO:-dangnam141002/threads-be}
-        kustomize edit set image ${IMAGE_REPO}:latest=${IMAGE_REPO}:1.0.0-${DRONE_COMMIT_SHA:0:7}
+        kustomize edit set image dangnam141002/threads-be:latest=dangnam141002/threads-be:1.0.0-${DRONE_COMMIT_SHA:0:7}
 
       # 5. Quay lại thư mục gốc của repo
       - cd ../../../../
