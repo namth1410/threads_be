@@ -11,6 +11,7 @@ import { LikesModule } from './likes/likes.module';
 import { winstonConfig } from './logger/winston.config';
 import { MinioModule } from './minio/minio.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ProductsModule } from './products/products.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { ThreadsModule } from './threads/threads.module';
 import { UsersModule } from './users/users.module';
@@ -29,6 +30,7 @@ import { MeModule } from './me/me.module';
     SessionsModule,
     MinioModule,
     NotificationsModule,
+    ProductsModule,
 
     // RedisModule.forRoot({
     //   type: 'single',

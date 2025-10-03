@@ -17,6 +17,13 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
 
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
+
   // 👇 Tạo tài liệu swagger với prefix '/api'
   const document = SwaggerModule.createDocument(app, config);
 
@@ -24,7 +31,6 @@ async function bootstrap() {
   SwaggerModule.setup('/docs', app, document);
 
   // 👇 Pipe validation
-  app.useGlobalPipes(new ValidationPipe({ transform: true }));
 
   // 👇 Mở CORS cho tất cả origin
   app.enableCors({
