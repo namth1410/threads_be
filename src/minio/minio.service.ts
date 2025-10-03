@@ -30,7 +30,16 @@ export class MinioService {
 
     const fileName = `${Date.now()}-${safeBaseName}${ext}`;
     try {
-      await this.minioClient.putObject(bucketName, fileName, file.buffer);
+      await this.minioClient.putObject(
+        bucketName,
+        fileName,
+        file.buffer,
+        file.size,
+        {
+          'Content-Type': file.mimetype, // quan trọng: giúp browser nhận diện file
+          'Content-Disposition': `inline; filename="${originalName}"`, // optional
+        },
+      );
       return fileName;
     } catch (error) {
       console.log(

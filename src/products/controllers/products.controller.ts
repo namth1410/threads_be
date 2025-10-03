@@ -183,7 +183,7 @@ export class ProductsController {
   }
 
   @Post()
-  @UseInterceptors(FilesInterceptor('images'))
+  @UseInterceptors(FilesInterceptor('files'))
   @ApiOperation({ summary: 'Create a new product' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -225,7 +225,6 @@ export class ProductsController {
     @Request() req: any,
     @UploadedFiles() files: Express.Multer.File[],
   ): Promise<ResponseDto<ProductResponseDto>> {
-    console.log('asasdasd');
     const userId = req.user.id;
     const user = await this.usersService.getUserById(userId);
 
