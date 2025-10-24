@@ -2,6 +2,9 @@ kind: pipeline
 type: kubernetes
 name: build-push-and-update-infra
 
+clone:
+  depth: 1
+
 trigger:
   branch:
     - main
