@@ -6,8 +6,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 👇 Prefix tất cả route bằng /api
-  app.setGlobalPrefix('/api');
+  // 👇 Prefix tất cả route bằng /api, exclude /health cho K8s health check
+  app.setGlobalPrefix('/api', {
+    exclude: ['health'],
+  });
 
   // 👇 Swagger config
   const config = new DocumentBuilder()

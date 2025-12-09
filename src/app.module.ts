@@ -16,10 +16,12 @@ import { SessionsModule } from './sessions/sessions.module';
 import { ThreadsModule } from './threads/threads.module';
 import { UsersModule } from './users/users.module';
 import { MeModule } from './me/me.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
     AuthModule,
+    HealthModule,
     CacheModule,
     CommentsModule,
     DbModule,
